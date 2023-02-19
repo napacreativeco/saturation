@@ -19,16 +19,20 @@ SaturationAudioProcessor::SaturationAudioProcessor()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       ), apvts(*this, nullptr, "PARAMETERS", createParameters())
+                       ), apvts(*this, nullptr, "PARAMETERS", createParameters()),
+                          waveViewer(1)
 #endif
 {
+    waveViewer.setRepaintRate(30);
+    waveViewer.setBufferSize(256);
 
     //===========================
     // PRE GAIN
     //===========================
     auto& inputGain = processorChain.template get<0>();
     inputGain.setRampDurationSeconds(0.02);
-    inputGain.setGainDecibels(3.0f);
+    inputGain.setGainDecibels(apvts.getRawParameterValue("INPUT")->load());
+
 
     //===========================
     // FILTER START
@@ -36,29 +40,27 @@ SaturationAudioProcessor::SaturationAudioProcessor()
     auto& filterStart = processorChain.template get<1>();
 
     filterStart.setMode(juce::dsp::LadderFilterMode::HPF12);
-    filterStart.setCutoffFrequencyHz(400.0);
-    filterStart.setResonance(0.4);
-    filterStart.setDrive(1.0);
+    filterStart.setCutoffFrequencyHz(apvts.getRawParameterValue("FREQ_START")->load());
+    filterStart.setResonance(0.5);
+    filterStart.setDrive(2.0);
 
     //===========================
     // WAVESHAPER
     //===========================
-    auto& waveshaper = processorChain.template get<2>();
-    waveshaper.functionToUse = [](float x)
-    {
-        return std::tanh(x);
-    };
+    //auto& waveshaper = processorChain.template get<2>();
+    //waveshaper.functionToUse = [](float x)
+    //{
+    //    return std::tanh(x);
+    //};
 
     //===========================
-    // FILTER END
+    // COMPRESSOR
     //===========================
-    auto& filterEnd = processorChain.template get<3>();
-
-    // Lightly attenuate High Frequency with LowPass12
-    filterEnd.setMode(juce::dsp::LadderFilterMode::LPF12);
-    filterEnd.setCutoffFrequencyHz(800.0);
-    filterEnd.setResonance(0.5);
-    filterEnd.setDrive(10.0);
+    auto& compressor = processorChain.template get<2>();
+    compressor.setAttack(200);
+    compressor.setRelease(500);
+    compressor.setRatio(apvts.getRawParameterValue("RATIO")->load());
+    compressor.setThreshold(apvts.getRawParameterValue("THRESHOLD")->load());
 
     //===========================
     // CONVOLUTION
@@ -69,7 +71,7 @@ SaturationAudioProcessor::SaturationAudioProcessor()
     while (!dir.getChildFile("IR").exists() && numTries++ < 15)
         dir = dir.getParentDirectory();
 
-    auto& convolution = processorChain.template get<4>();
+    auto& convolution = processorChain.template get<3>();
 
     convolution.loadImpulseResponse(dir.getChildFile("IR").getChildFile("cassette_recorder.wav"),
         juce::dsp::Convolution::Stereo::yes,
@@ -77,11 +79,22 @@ SaturationAudioProcessor::SaturationAudioProcessor()
         1024);
 
     //===========================
+    // FILTER END
+    //===========================
+    auto& filterEnd = processorChain.template get<4>();
+
+    // Lightly attenuate High Frequency with LowPass12
+    filterEnd.setMode(juce::dsp::LadderFilterMode::LPF24);
+    filterEnd.setCutoffFrequencyHz(apvts.getRawParameterValue("FREQ_END")->load());
+    filterEnd.setResonance(0.5);
+    filterEnd.setDrive(3.0);
+
+    //===========================
     // POST GAIN
     //===========================
     auto& outputGain = processorChain.template get<5>();
     outputGain.setRampDurationSeconds(0.02);
-    outputGain.setGainDecibels(2.0f);
+    outputGain.setGainDecibels(apvts.getRawParameterValue("OUTPUT")->load());
 }
 
 SaturationAudioProcessor::~SaturationAudioProcessor()
@@ -166,8 +179,7 @@ void SaturationAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
 
 void SaturationAudioProcessor::releaseResources()
 {
-    // When playback stops, you can use this as an opportunity to free up any
-    // spare memory, etc.
+    processorChain.reset();
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -210,11 +222,30 @@ void SaturationAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     {
         buffer.clear(i, 0, buffer.getNumSamples());
     }
-        
+      
+
+    auto& inputGain = processorChain.template get<0>();
+    auto& filterStart = processorChain.template get<1>();
+    auto& compressor = processorChain.template get<2>();
+    //auto& waveshaper = processorChain.template get<2>();
+    auto& convolution = processorChain.template get<3>();
+    auto& filterEnd = processorChain.template get<4>();
+    auto& outputGain = processorChain.template get<5>();
+
+    inputGain.setGainDecibels(apvts.getRawParameterValue("INPUT")->load());
+    filterStart.setCutoffFrequencyHz(apvts.getRawParameterValue("FREQ_START")->load());
+    compressor.setRatio(apvts.getRawParameterValue("RATIO")->load());
+    compressor.setThreshold(apvts.getRawParameterValue("THRESHOLD")->load());
+    filterEnd.setCutoffFrequencyHz(apvts.getRawParameterValue("FREQ_END")->load());
+    outputGain.setGainDecibels(apvts.getRawParameterValue("OUTPUT")->load());
+
+
     juce::dsp::AudioBlock<float> block(buffer);
     juce::dsp::ProcessContextReplacing<float> ctx(block);
 
     processorChain.process(ctx);
+
+    waveViewer.pushBuffer(buffer);
 }
 
 //==============================================================================
@@ -225,8 +256,8 @@ bool SaturationAudioProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* SaturationAudioProcessor::createEditor()
 {
-    // return new SaturationAudioProcessorEditor (*this);
-    return new juce::GenericAudioProcessorEditor(*this);
+    return new SaturationAudioProcessorEditor (*this);
+    //return new juce::GenericAudioProcessorEditor(*this);
 }
 
 //==============================================================================
@@ -254,9 +285,24 @@ juce::AudioProcessorValueTreeState::ParameterLayout SaturationAudioProcessor::cr
     // parameters in here
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    // push back to add a new param to the vector
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("INPUT", "Input", 0.0f, 1.0f, 0.5f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("FREQ", "Frequency", 600.0f, 1000.0f, 800.0f));
+    // Input Gain
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("INPUT", "Input", 1.0f, 20.0f, 1.0f));
+
+    // EQ Start
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("FREQ_START", "Input Frequency", 50.0f, 450.0f, 100.0f));
+
+    // Compressor
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("RATIO", "Ratio", 1.0f, 20.0f, 6.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("THRESHOLD", "Threshold", 0.0f, -20.0f, -10.0f));
+
+    // Convolution
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("LENGTH", "Convolution Length", 1.0f, 20.0f, 6.0f));
+
+    // EQ End
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("FREQ_END", "Output Frequency", 3000.0f, 10000.0f, 6000.0f));
+
+    // Output Gain
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("OUTPUT", "Output", 1.0f, 20.0f, 1.0f));
 
     return { params.begin(), params.end() };
 

@@ -5,10 +5,14 @@
               companyName="Throne">
   <MAINGROUP id="yW17c8" name="Saturation">
     <GROUP id="{B05318CB-6628-6171-A814-D0C95E470CB8}" name="Source">
+      <GROUP id="{0396C41A-8994-B6E8-4A66-8AC4338F5CDA}" name="LookAndFeel">
+        <FILE id="Bczvfb" name="LookAndFeel.cpp" compile="1" resource="0" file="Source/LookAndFeel.cpp"/>
+        <FILE id="fqvbBu" name="LookAndFeel.h" compile="0" resource="0" file="Source/LookAndFeel.h"/>
+      </GROUP>
       <GROUP id="{ECF4A80D-C6B9-C5CA-479F-6F644DF5F13E}" name="IR">
-        <FILE id="vMh2QQ" name="cassette_recorder.wav" compile="0" resource="1"
-              file="../../../Downloads/DSPConvolutionTutorial/DSPConvolutionTutorial/Resources/cassette_recorder.wav"/>
-        <FILE id="OhwBc0" name="guitar_amp.wav" compile="0" resource="1" file="../../../Downloads/DSPConvolutionTutorial/DSPConvolutionTutorial/Resources/guitar_amp.wav"/>
+        <FILE id="qg8RaG" name="cassette_recorder.wav" compile="0" resource="1"
+              file="D:/Dropbox/JAMES/Plugin Company/Assets/Impuse Responses/cassette_recorder.wav"/>
+        <FILE id="o9FZSX" name="guitar_amp.wav" compile="0" resource="1" file="D:/Dropbox/JAMES/Plugin Company/Assets/Impuse Responses/guitar_amp.wav"/>
       </GROUP>
       <FILE id="Qa5QaW" name="PluginProcessor.cpp" compile="1" resource="0"
             file="Source/PluginProcessor.cpp"/>

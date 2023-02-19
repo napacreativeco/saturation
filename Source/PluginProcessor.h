@@ -60,19 +60,14 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
-    enum ChainIndex
-    {
-        convIndex,
-        ladderStartIndex,
-        waveshaperIndex,
-        ladderEndIndex
-    };
+    juce::AudioVisualiserComponent waveViewer;
 
     juce::dsp::ProcessorChain<juce::dsp::Gain<float>,
                               juce::dsp::LadderFilter<float>,
-                              juce::dsp::WaveShaper<float>,
-                              juce::dsp::LadderFilter<float>,
+                              juce::dsp::Compressor<float>,
+                              //juce::dsp::WaveShaper<float>,
                               juce::dsp::Convolution,
+                              juce::dsp::LadderFilter<float>,
                               juce::dsp::Gain<float>> processorChain;
 
 private:
